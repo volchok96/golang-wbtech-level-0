@@ -1,14 +1,20 @@
-version: '3'
+version: '3.8'
 
 services:
   db:
     container_name: db
     ports: 
-    - "5432:5432"
+    - "5433:5432"
     environment:
+      - POSTGRES_DB=orderdb
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=root
-      - POSTGRES_DB=mydatabase
+      - POSTGRES_PASSWORD=mypass
     image: postgres:latest
     volumes:
       - ./data:/var/lib/postgresql/data
+
+  nats:
+    image: nats-streaming:latest
+    ports:
+      - 4222:4222 # Основной порт для клиентских подключений
+      - 8222:8222 # Порт для мониторинга и управления
