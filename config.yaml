@@ -1,0 +1,11 @@
+db:
+    host: "localhost"
+    port: 5432
+    user: "postgres"
+    password: "mypass"
+    name: "orderdb"
+nats:
+    host: "localhost"
+    port: 4222
+    clusterID: "wb-cluster"
+    clientID: "clientOrder"
