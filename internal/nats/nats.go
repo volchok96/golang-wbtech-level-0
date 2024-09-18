@@ -24,7 +24,7 @@ func Nats() {
 	clusterID := config.Nats.ClusterID
 	clientID := config.Nats.ClientID
 
-	orders := unmarshal.ReadOrdersFromDirectory("json")
+	orders := unmarshal.ReadOrdersFromDirectory(".././materials")
 
 	conn := postgres.ConnectToDB(&config)
 	defer conn.Close(context.Background())

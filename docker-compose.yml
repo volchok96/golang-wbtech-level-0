@@ -9,12 +9,19 @@ services:
       - POSTGRES_DB=orderdb
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=mypass
-    image: postgres:latest
+    image: postgres:alpine
     volumes:
       - ./data:/var/lib/postgresql/data
 
   nats:
-    image: nats-streaming:latest
+    container_name: nats
+    image: nats-streaming:alpine
     ports:
       - 4222:4222 # Основной порт для клиентских подключений
       - 8222:8222 # Порт для мониторинга и управления
+
+  memcached:
+    container_name: memcached
+    image: memcached:alpine
+    ports:
+      - "11211:11211"
