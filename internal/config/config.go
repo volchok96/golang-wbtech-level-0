@@ -30,7 +30,7 @@ type AppConfig struct {
 func GetConfig() (AppConfig, error) {
 	var config AppConfig
 
-	file, err := os.ReadFile("config.yaml")
+	file, err := os.ReadFile(".././config.yaml")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to read config file")
 		return config, err

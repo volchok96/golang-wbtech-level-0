@@ -1,0 +1,30 @@
+.PHONY: build up down run local docker clean clean-all
+
+build:
+	docker-compose build
+
+up:
+	docker-compose up -d
+
+down:
+	docker-compose down
+
+run:
+	cd cmd && go run main.go
+
+initdb:
+	PGPASSWORD=mypass psql -U postgres -h localhost -f scripts/init.sql
+
+nats:
+	nats-server -p 4223
+
+local: initdb nats run
+
+docker: build up
+
+clean: down
+	docker-compose rm -f
+
+clean-all: clean
+	docker-compose down --rmi all --volumes --remove-orphans
+
