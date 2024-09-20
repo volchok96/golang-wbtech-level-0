@@ -4,11 +4,11 @@ services:
   db:
     container_name: db
     ports: 
-    - "5433:5432"
+      - "5433:5432"
     environment:
-      - POSTGRES_DB=orderdb
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=mypass
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mypass
     image: postgres:alpine
     volumes:
       - ./data:/var/lib/postgresql/data
@@ -17,11 +17,11 @@ services:
     container_name: nats
     image: nats-streaming:alpine
     ports:
-      - 4222:4222 # Основной порт для клиентских подключений
+      - 4223:4222 # Основной порт для клиентских подключений
       - 8222:8222 # Порт для мониторинга и управления
 
   memcached:
     container_name: memcached
-    image: memcached:alpine
+    image: memcached
     ports:
       - "11211:11211"

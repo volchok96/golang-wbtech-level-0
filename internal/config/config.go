@@ -39,7 +39,6 @@ func GetConfig() (AppConfig, error) {
 	err = yaml.Unmarshal(file, &config)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to unmarshal config file")
-		return config, err
 	}
 
 	return config, nil
