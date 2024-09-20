@@ -1,12 +1,13 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
-	"wb-nats-service/internal/config"
-	"wb-nats-service/internal/db"
-	"wb-nats-service/internal/models"
+	"wb-kafka-service/internal/config"
+	"wb-kafka-service/internal/db"
+	"wb-kafka-service/internal/models"
 
 	"github.com/jackc/pgx/v4"
 )
@@ -21,26 +22,37 @@ func ConnectToDB(config *config.AppConfig) *pgx.Conn {
 	return conn
 }
 
-func InsertOrderToDB(conn *pgx.Conn, order *models.Order) {
-	err := db.InsertDelivery(conn, &order.Delivery)
+func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		log.Fatalf("Error starting transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	err = db.InsertDelivery(ctx, tx, &order.Delivery)
 	if err != nil {
 		log.Fatalf("Error inserting delivery: %v", err)
 	}
 
-	err = db.InsertPayment(conn, &order.Payment)
+	err = db.InsertPayment(ctx, tx, &order.Payment)
 	if err != nil {
 		log.Fatalf("Error inserting payment: %v", err)
 	}
 
 	for _, item := range order.Items {
-		err = db.InsertItem(conn, &item)
+		err = db.InsertItem(ctx, tx, &item)
 		if err != nil {
 			log.Fatalf("Error inserting item: %v", err)
 		}
 	}
 
-	err = db.InsertOrder(conn, order)
+	err = db.InsertOrder(ctx, tx, order)
 	if err != nil {
 		log.Fatalf("Error inserting order: %v", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Fatalf("Error committing transaction: %v", err)
 	}
 }

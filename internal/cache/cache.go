@@ -3,7 +3,7 @@ package cache
 import (
 	"encoding/json"
 	"strconv"
-	"wb-nats-service/internal/models"
+	"wb-kafka-service/internal/models"
 
 	"github.com/bradfitz/gomemcache/memcache"
 )

@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"wb-nats-service/internal/models"
+	"wb-kafka-service/internal/models"
 )
 
 func ReadOrdersFromFiles(jsonFiles []string) []models.Order {

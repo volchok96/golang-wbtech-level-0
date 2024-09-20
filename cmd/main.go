@@ -1,16 +1,28 @@
 package main
 
 import (
-	"net/http"
-	"wb-nats-service/internal/nats"
-	"wb-nats-service/internal/handlers"
+	"context"
 
+	"github.com/rs/zerolog/log"
+
+	"net/http"
+	"wb-kafka-service/internal/config"
+	"wb-kafka-service/internal/handlers"
+	"wb-kafka-service/internal/kafka"
+	"wb-kafka-service/pkg/postgres"
 )
 
 func main() {
-	http.HandleFunc("/order", handler.HandlerOrder)
+	config, err := config.GetConfig()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get config")
+	}
 
-	nats.Nats()
+	conn := postgres.ConnectToDB(&config)
+	defer conn.Close(context.Background())
 
+	kafka.InitKafka(&config, conn)
+
+	http.HandleFunc("/order", handlers.HandlerOrder)
 	http.ListenAndServe(":8082", nil)
 }

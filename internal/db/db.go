@@ -1,10 +1,11 @@
+
 package db
 
 import (
 	"context"
 	"fmt"
-	"wb-nats-service/internal/config"
-	"wb-nats-service/internal/models"
+	"wb-kafka-service/internal/config"
+	"wb-kafka-service/internal/models"
 
 	"github.com/jackc/pgx/v4"
 )
@@ -12,23 +13,23 @@ import (
 func ConnectDB(config config.AppConfig) (*pgx.Conn, error) {
 	return pgx.Connect(
 		context.Background(),
-		fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-			config.DB.User,
-			config.DB.Password,
-			config.DB.Host,
-			config.DB.Port,
-			config.DB.Name))
+		fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+			config.Postgres.User,
+			config.Postgres.Password,
+			config.Postgres.Host,
+			config.Postgres.Port,
+			config.Postgres.DBName))
 }
 
-func InsertItem(conn *pgx.Conn, item *models.Items) error {
-	err := conn.QueryRow(context.Background(),
+func InsertItem(ctx context.Context, tx pgx.Tx, item *models.Items) error {
+	err := tx.QueryRow(ctx,
 		`SELECT id FROM items WHERE chrt_id = $1 AND track_number = $2 AND price = $3`,
 		item.ChrtID,
 		item.TrackNumber,
 		item.Price).Scan(&item.ID)
 
 	if err == pgx.ErrNoRows {
-		err = conn.QueryRow(context.Background(),
+		err = tx.QueryRow(ctx,
 			`INSERT INTO items (chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
 			item.ChrtID,
@@ -46,8 +47,8 @@ func InsertItem(conn *pgx.Conn, item *models.Items) error {
 	return err
 }
 
-func InsertDelivery(conn *pgx.Conn, delivery *models.Delivery) error {
-	err := conn.QueryRow(context.Background(),
+func InsertDelivery(ctx context.Context, tx pgx.Tx, delivery *models.Delivery) error {
+	err := tx.QueryRow(ctx,
 		`INSERT INTO delivery (name, phone, zip, city, address, region, email)
         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
 		delivery.Name,
@@ -60,8 +61,8 @@ func InsertDelivery(conn *pgx.Conn, delivery *models.Delivery) error {
 	return err
 }
 
-func InsertPayment(conn *pgx.Conn, payment *models.Payment) error {
-	err := conn.QueryRow(context.Background(),
+func InsertPayment(ctx context.Context, tx pgx.Tx, payment *models.Payment) error {
+	err := tx.QueryRow(ctx,
 		`INSERT INTO payment (transaction, request_id, currency, provider, amount, payment_dt, bank, delivery_cost, goods_total, custom_fee)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
 		payment.Transaction,
@@ -77,8 +78,8 @@ func InsertPayment(conn *pgx.Conn, payment *models.Payment) error {
 	return err
 }
 
-func InsertOrder(conn *pgx.Conn, order *models.Order) error {
-	err := conn.QueryRow(context.Background(),
+func InsertOrder(ctx context.Context, tx pgx.Tx, order *models.Order) error {
+	err := tx.QueryRow(ctx,
 		`INSERT INTO orders (order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
 		order.OrderUid,

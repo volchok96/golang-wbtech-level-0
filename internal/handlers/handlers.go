@@ -1,12 +1,12 @@
-package handler
+package handlers
 
 import (
 	"html/template"
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"wb-nats-service/internal/cache"
-	"wb-nats-service/internal/models"
+	"wb-kafka-service/internal/cache"
+	"wb-kafka-service/internal/models"
 
 	"github.com/rs/zerolog/log"
 )

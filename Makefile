@@ -12,15 +12,9 @@ down:
 run:
 	cd cmd && go run main.go
 
-initdb:
-	PGPASSWORD=mypass psql -U postgres -h localhost -f scripts/init.sql
+local: run
 
-nats:
-	nats-server -p 4223
-
-local: initdb nats run
-
-docker: build up
+docker: build up run
 
 clean: down
 	docker-compose rm -f
