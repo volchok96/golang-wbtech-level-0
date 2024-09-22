@@ -1,7 +1,7 @@
 kafka:
   broker: "localhost:9092"  
-  group_id: "my-group"
-  topic: "my-topic"   
+  group_id: "order-group"
+  topic: "orders"   
 
 postgres:
   host: "localhost"

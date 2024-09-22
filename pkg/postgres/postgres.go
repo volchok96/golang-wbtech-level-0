@@ -6,83 +6,74 @@ import (
 	"wb-kafka-service/internal/config"
 	"wb-kafka-service/internal/db"
 	"wb-kafka-service/internal/models"
+	"wb-kafka-service/pkg/logger" 
 
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/rs/zerolog/log"
 )
 
-// ConnectToDB - функция для подключения к базе данных, возвращает ошибку, если не удается подключиться
-func ConnectToDB(config *config.AppConfig) (*pgxpool.Pool, error) {
-	pool, err := db.ConnectDB(*config)
+func ConnectToDB(config *config.AppConfig, log *logger.Logger) (*pgxpool.Pool, error) {
+	pool, err := db.ConnectDB(log, *config)
 	if err != nil {
-		log.Error().Err(err).Msgf("Unable to connect to database: %v", err)
+		log.Error("Unable to connect to database", err)
 		return nil, err
 	}
 	return pool, nil
 }
 
-// InsertOrderToDB - вставка заказа в базу данных с обработкой ошибок
-func InsertOrderToDB(ctx context.Context, pool *pgxpool.Pool, order *models.Order) error {
+func InsertOrderToDB(ctx context.Context, pool *pgxpool.Pool, order *models.Order, log *logger.Logger) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error starting transaction")
+		log.Error("Error starting transaction", err)
 		return fmt.Errorf("error starting transaction: %v", err)
 	}
 	defer func() {
-		// Откат транзакции, если произошла ошибка
 		if p := recover(); p != nil {
 			tx.Rollback(ctx)
-			log.Error().Msg("Transaction rolled back due to panic")
+			log.Error("Transaction rolled back due to panic", nil)
 		}
 	}()
 
-	// Вставка данных о доставке
-	_, err = db.InsertDelivery(tx, &order.Delivery)
+	_, err = db.InsertDelivery(log, tx, &order.Delivery)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Error().Err(err).Msg("Error inserting delivery")
+		log.Error("Error inserting delivery", err)
 		return fmt.Errorf("error inserting delivery: %v", err)
 	}
 
-	// Вставка данных об оплате
-	_, err = db.InsertPayment(tx, &order.Payment)
+	_, err = db.InsertPayment(log, tx, &order.Payment)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Error().Err(err).Msg("Error inserting payment")
+		log.Error("Error inserting payment", err)
 		return fmt.Errorf("error inserting payment: %v", err)
 	}
 
-	// Вставка позиций заказа
 	for _, item := range order.Items {
-		err = db.InsertItem(tx, &item)
+		err = db.InsertItem(log, tx, &item)  
 		if err != nil {
 			tx.Rollback(ctx)
-			log.Error().Err(err).Msg("Error inserting item")
+			log.Error("Error inserting item", err)
 			return fmt.Errorf("error inserting item: %v", err)
 		}
 	}
 
-	// Вставка самого заказа
-	err = db.InsertOrder(tx, order)
+	err = db.InsertOrder(log, tx, order)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Error().Err(err).Msg("Error inserting order")
+		log.Error("Error inserting order", err)
 		return fmt.Errorf("error inserting order: %v", err)
 	}
 
-	// Коммит транзакции
 	err = tx.Commit(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error committing transaction")
+		log.Error("Error committing transaction", err)
 		return fmt.Errorf("error committing transaction: %v", err)
 	}
 
-	log.Info().Msgf("Order successfully inserted: %v", order)
+	log.Info("Order successfully inserted")
 	return nil
 }
 
-// GetOrderFromDB - чтение заказа из базы данных по ID
-func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int) (*models.Order, error) {
+func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int, log *logger.Logger) (*models.Order, error) {
 	var order models.Order
 	err := pool.QueryRow(ctx, "SELECT id, order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard FROM orders WHERE id = $1", orderID).Scan(
 		&order.ID,
@@ -101,11 +92,10 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int) (*mode
 		&order.OofShard,
 	)
 	if err != nil {
-		log.Error().Err(err).Msgf("Error getting order from DB: %v", err)
+		log.Error("Error getting order from DB", err)
 		return nil, err
 	}
 
-	// Читаем данные о доставке
 	err = pool.QueryRow(ctx, "SELECT id, name, phone, zip, city, address, region, email FROM delivery WHERE id = $1", order.Delivery.ID).Scan(
 		&order.Delivery.ID,
 		&order.Delivery.Name,
@@ -117,11 +107,10 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int) (*mode
 		&order.Delivery.Email,
 	)
 	if err != nil {
-		log.Error().Err(err).Msgf("Error getting delivery from DB: %v", err)
+		log.Error("Error getting delivery from DB", err)
 		return nil, err
 	}
 
-	// Читаем данные об оплате
 	err = pool.QueryRow(ctx, "SELECT id, transaction, request_id, currency, provider, amount, payment_dt, bank, delivery_cost, goods_total, custom_fee FROM payment WHERE id = $1", order.Payment.ID).Scan(
 		&order.Payment.ID,
 		&order.Payment.Transaction,
@@ -136,14 +125,13 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int) (*mode
 		&order.Payment.CustomFee,
 	)
 	if err != nil {
-		log.Error().Err(err).Msgf("Error getting payment from DB: %v", err)
+		log.Error("Error getting payment from DB", err)
 		return nil, err
 	}
 
-	// Читаем позиции заказа
 	rows, err := pool.Query(ctx, "SELECT id, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items")
 	if err != nil {
-		log.Error().Err(err).Msgf("Error getting items from DB: %v", err)
+		log.Error("Error getting items from DB", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -165,17 +153,17 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int) (*mode
 			&item.Status,
 		)
 		if err != nil {
-			log.Error().Err(err).Msgf("Error scanning item from DB: %v", err)
+			log.Error("Error scanning item from DB", err)
 			return nil, err
 		}
 		order.Items = append(order.Items, item)
 	}
 
 	if err = rows.Err(); err != nil {
-		log.Error().Err(err).Msgf("Error iterating over items: %v", err)
+		log.Error("Error iterating over items", err)
 		return nil, err
 	}
 
-	log.Info().Msgf("Order successfully retrieved from DB: %v", order)
+	log.Info("Order successfully retrieved from DB")
 	return &order, nil
 }
