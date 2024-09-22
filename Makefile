@@ -10,7 +10,7 @@ down:
 	docker-compose down
 
 run:
-	cd cmd && go run main.go
+	APP_ENV=local cd cmd && go run main.go
 
 local: run
 
