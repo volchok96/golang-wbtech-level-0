@@ -4,7 +4,8 @@ kafka:
   topic: "my-topic"   
 
 postgres:
-  host: "localhost"      
+  host: "localhost"
+  port: 5432    
   user: "postgres"
   password: "mypass"
   dbname: "orderdb"

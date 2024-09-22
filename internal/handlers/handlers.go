@@ -52,7 +52,7 @@ func HandlerOrder(w http.ResponseWriter, r *http.Request) {
 			items[i] = item
 		}
 
-		tmpl := template.Must(template.ParseFiles(".././order.html"))
+		tmpl := template.Must(template.ParseFiles(".././ui.html"))
 		data := OrderPageData{
 			Order:    order,
 			Delivery: delivery,
@@ -82,7 +82,7 @@ func HandlerOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	defer conn.Close(context.Background())
+	defer conn.Close()
 
 	order, err := postgres.GetOrderFromDB(context.Background(), conn, orderID)
 	if err != nil {
@@ -114,7 +114,7 @@ func HandlerOrder(w http.ResponseWriter, r *http.Request) {
 		items[i] = item
 	}
 
-	tmpl := template.Must(template.ParseFiles(".././order.html"))
+	tmpl := template.Must(template.ParseFiles(".././ui.html"))
 	data := OrderPageData{
 		Order:    *order,
 		Delivery: delivery,

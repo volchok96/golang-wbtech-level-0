@@ -5,7 +5,7 @@ type Order struct {
 	OrderUid          string   `json:"order_uid"`
 	TrackNumber       string   `json:"track_number"`
 	Entry             string   `json:"entry"`
-	Locale            string   `json:"loacale"`
+	Locale            string   `json:"locale"`
 	InternalSignature string   `json:"internal_signature"`
 	CustomerID        string   `json:"customer_id"`
 	DeliveryService   string   `json:"delivery_service"`
