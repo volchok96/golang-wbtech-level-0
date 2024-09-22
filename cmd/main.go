@@ -18,15 +18,15 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to get config")
 	}
 
-	conn, err := postgres.ConnectToDB(&config)
+	pool, err := postgres.ConnectToDB(&config)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to DB")
 	}
-	defer conn.Close(context.Background())
+	defer pool.Close()
 
 	// Запускаем Kafka-консюмера в отдельной горутине
 	go func() {
-		kafka.InitKafka(&config, conn)
+		kafka.InitKafka(&config, pool)
 	}()
 
 	// Запускаем HTTP-сервер для обработки запросов
@@ -39,16 +39,17 @@ func main() {
 	}()
 
 	// Читаем существующий заказ из базы данных
-	// order, err := postgres.GetOrderFromDB(context.Background(), conn, 1) // Предполагаем, что заказ с ID 1 существует
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Failed to get order from DB")
-	// } else {
-	// 	// Отправляем заказ в Kafka
-	// 	err = kafka.ProduceOrder(&config, order)
-	// 	if err != nil {
-	// 		log.Error().Err(err).Msg("Failed to produce order")
-	// 	}
-	// }
+	order, err := postgres.GetOrderFromDB(context.Background(), pool, 1) // Предполагаем, что заказ с ID 1 существует
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get order from DB")
+	} else {
+		// Отправляем заказ в Kafka
+		err = kafka.ProduceOrder(&config, order)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to produce order")
+		}
+	}
+
 	// Бесконечный цикл для поддержания работы основного потока
 	select {}
 }

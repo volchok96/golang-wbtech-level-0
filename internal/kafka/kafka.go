@@ -11,14 +11,14 @@ import (
 	"wb-kafka-service/pkg/postgres"
 	"wb-kafka-service/pkg/unmarshal"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog/log"
 	"github.com/segmentio/kafka-go"
 )
 
 var Cache = make(map[int]models.Order)
 
-func InitKafka(cfg *config.AppConfig, conn *pgx.Conn) {
+func InitKafka(cfg *config.AppConfig, pool *pgxpool.Pool) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  []string{cfg.Kafka.Broker},
 		Topic:    cfg.Kafka.Topic,
@@ -36,7 +36,7 @@ func InitKafka(cfg *config.AppConfig, conn *pgx.Conn) {
 	// Обрабатываем каждый заказ отдельно
 	for _, order := range orders {
 		// Сохраняем заказ в базу данных
-		err := postgres.InsertOrderToDB(context.Background(), conn, &order)
+		err := postgres.InsertOrderToDB(context.Background(), pool, &order)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error inserting order into DB: %v", order.ID)
 			continue
@@ -71,7 +71,7 @@ func InitKafka(cfg *config.AppConfig, conn *pgx.Conn) {
 		}
 
 		// Сохраняем заказ в базу данных
-		err = postgres.InsertOrderToDB(context.Background(), conn, &order)
+		err = postgres.InsertOrderToDB(context.Background(), pool, &order)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error inserting order into DB: %v", order.ID)
 			continue

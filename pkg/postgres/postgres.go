@@ -7,23 +7,23 @@ import (
 	"wb-kafka-service/internal/db"
 	"wb-kafka-service/internal/models"
 
-	"github.com/jackc/pgx/v4"
-	"github.com/rs/zerolog/log" // Используем zerolog для логирования
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 // ConnectToDB - функция для подключения к базе данных, возвращает ошибку, если не удается подключиться
-func ConnectToDB(config *config.AppConfig) (*pgx.Conn, error) {
-	conn, err := db.ConnectDB(*config)
+func ConnectToDB(config *config.AppConfig) (*pgxpool.Pool, error) {
+	pool, err := db.ConnectDB(*config)
 	if err != nil {
 		log.Error().Err(err).Msgf("Unable to connect to database: %v", err)
 		return nil, err
 	}
-	return conn, nil
+	return pool, nil
 }
 
 // InsertOrderToDB - вставка заказа в базу данных с обработкой ошибок
-func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) error {
-	tx, err := conn.Begin(ctx)
+func InsertOrderToDB(ctx context.Context, pool *pgxpool.Pool, order *models.Order) error {
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error starting transaction")
 		return fmt.Errorf("error starting transaction: %v", err)
@@ -37,7 +37,7 @@ func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) e
 	}()
 
 	// Вставка данных о доставке
-	err = db.InsertDelivery(ctx, tx, &order.Delivery)
+	_, err = db.InsertDelivery(tx, &order.Delivery)
 	if err != nil {
 		tx.Rollback(ctx)
 		log.Error().Err(err).Msg("Error inserting delivery")
@@ -45,7 +45,7 @@ func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) e
 	}
 
 	// Вставка данных об оплате
-	err = db.InsertPayment(ctx, tx, &order.Payment)
+	_, err = db.InsertPayment(tx, &order.Payment)
 	if err != nil {
 		tx.Rollback(ctx)
 		log.Error().Err(err).Msg("Error inserting payment")
@@ -54,7 +54,7 @@ func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) e
 
 	// Вставка позиций заказа
 	for _, item := range order.Items {
-		err = db.InsertItem(ctx, tx, &item)
+		err = db.InsertItem(tx, &item)
 		if err != nil {
 			tx.Rollback(ctx)
 			log.Error().Err(err).Msg("Error inserting item")
@@ -63,7 +63,7 @@ func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) e
 	}
 
 	// Вставка самого заказа
-	err = db.InsertOrder(ctx, tx, order)
+	err = db.InsertOrder(tx, order)
 	if err != nil {
 		tx.Rollback(ctx)
 		log.Error().Err(err).Msg("Error inserting order")
@@ -82,14 +82,23 @@ func InsertOrderToDB(ctx context.Context, conn *pgx.Conn, order *models.Order) e
 }
 
 // GetOrderFromDB - чтение заказа из базы данных по ID
-func GetOrderFromDB(ctx context.Context, conn *pgx.Conn, orderID int) (*models.Order, error) {
+func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int) (*models.Order, error) {
 	var order models.Order
-	err := conn.QueryRow(ctx, "SELECT id, user_id, product, quantity, price FROM orders WHERE id = $1", orderID).Scan(
+	err := pool.QueryRow(ctx, "SELECT id, order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard FROM orders WHERE id = $1", orderID).Scan(
 		&order.ID,
 		&order.OrderUid,
+		&order.TrackNumber,
 		&order.Entry,
-		&order.Items,
-		&order.Payment,
+		&order.Delivery.ID,
+		&order.Payment.ID,
+		&order.Locale,
+		&order.InternalSignature,
+		&order.CustomerID,
+		&order.DeliveryService,
+		&order.Shardkey,
+		&order.SmID,
+		&order.DateCreated,
+		&order.OofShard,
 	)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting order from DB: %v", err)
@@ -97,11 +106,15 @@ func GetOrderFromDB(ctx context.Context, conn *pgx.Conn, orderID int) (*models.O
 	}
 
 	// Читаем данные о доставке
-	err = conn.QueryRow(ctx, "SELECT id, address, city, country FROM deliveries WHERE order_id = $1", orderID).Scan(
+	err = pool.QueryRow(ctx, "SELECT id, name, phone, zip, city, address, region, email FROM delivery WHERE id = $1", order.Delivery.ID).Scan(
 		&order.Delivery.ID,
-		&order.Delivery.Address,
+		&order.Delivery.Name,
+		&order.Delivery.Phone,
+		&order.Delivery.Zip,
 		&order.Delivery.City,
+		&order.Delivery.Address,
 		&order.Delivery.Region,
+		&order.Delivery.Email,
 	)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting delivery from DB: %v", err)
@@ -109,10 +122,18 @@ func GetOrderFromDB(ctx context.Context, conn *pgx.Conn, orderID int) (*models.O
 	}
 
 	// Читаем данные об оплате
-	err = conn.QueryRow(ctx, "SELECT id, method, amount FROM payments WHERE order_id = $1", orderID).Scan(
+	err = pool.QueryRow(ctx, "SELECT id, transaction, request_id, currency, provider, amount, payment_dt, bank, delivery_cost, goods_total, custom_fee FROM payment WHERE id = $1", order.Payment.ID).Scan(
 		&order.Payment.ID,
+		&order.Payment.Transaction,
+		&order.Payment.RequestID,
 		&order.Payment.Currency,
+		&order.Payment.Provider,
 		&order.Payment.Amount,
+		&order.Payment.PaymentDT,
+		&order.Payment.Bank,
+		&order.Payment.DeliveryCost,
+		&order.Payment.GoodsTotal,
+		&order.Payment.CustomFee,
 	)
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting payment from DB: %v", err)
@@ -120,7 +141,7 @@ func GetOrderFromDB(ctx context.Context, conn *pgx.Conn, orderID int) (*models.O
 	}
 
 	// Читаем позиции заказа
-	rows, err := conn.Query(ctx, "SELECT id, product_id, quantity, price FROM items WHERE order_id = $1", orderID)
+	rows, err := pool.Query(ctx, "SELECT id, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items")
 	if err != nil {
 		log.Error().Err(err).Msgf("Error getting items from DB: %v", err)
 		return nil, err
@@ -132,8 +153,16 @@ func GetOrderFromDB(ctx context.Context, conn *pgx.Conn, orderID int) (*models.O
 		err = rows.Scan(
 			&item.ID,
 			&item.ChrtID,
+			&item.TrackNumber,
+			&item.Price,
+			&item.Rid,
+			&item.Name,
+			&item.Sale,
 			&item.Size,
 			&item.TotalPrice,
+			&item.NmID,
+			&item.Brand,
+			&item.Status,
 		)
 		if err != nil {
 			log.Error().Err(err).Msgf("Error scanning item from DB: %v", err)
