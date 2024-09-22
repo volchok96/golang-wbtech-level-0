@@ -4,49 +4,62 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
-
 	"wb-kafka-service/internal/config"
 	"wb-kafka-service/internal/handlers"
 	"wb-kafka-service/internal/kafka"
+	"wb-kafka-service/pkg/logger"
 	"wb-kafka-service/pkg/postgres"
 )
 
 func main() {
-	config, err := config.GetConfig()
+	// Инициализация логгера с выводом в файл и консоль
+	log, err := logger.NewLogger("app.log", true) // true - логирование и в консоль, и в файл
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get config")
+		log.Fatal("Failed to create logger", err)
+	}
+	defer log.Close()
+
+	// Получаем конфигурацию
+	config, err := config.GetConfig(log)
+	if err != nil {
+		log.Fatal("Failed to get config", err)
 	}
 
-	pool, err := postgres.ConnectToDB(&config)
+	// Подключение к базе данных
+	pool, err := postgres.ConnectToDB(&config, log)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to DB")
+		log.Fatal("Failed to connect to DB", err)
 	}
 	defer pool.Close()
 
 	// Запускаем Kafka-консюмера в отдельной горутине
 	go func() {
-		kafka.InitKafka(&config, pool)
+		log.Info("Starting Kafka consumer...")
+		kafka.InitKafka(&config, pool, log)
 	}()
 
-	// Запускаем HTTP-сервер для обработки запросов
-	http.HandleFunc("/order", handlers.HandlerOrder)
-	log.Info().Msg("Starting HTTP server on :8080")
+	http.HandleFunc("/order", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandlerOrder(log, w, r)
+	})
+
+	log.Info("Starting HTTP server on :8080")
 	go func() {
 		if err := http.ListenAndServe(":8080", nil); err != nil {
-			log.Fatal().Err(err).Msg("HTTP server failed")
+			log.Fatal("HTTP server failed", err)
 		}
 	}()
 
 	// Читаем существующий заказ из базы данных
-	order, err := postgres.GetOrderFromDB(context.Background(), pool, 1) // Предполагаем, что заказ с ID 1 существует
+	order, err := postgres.GetOrderFromDB(context.Background(), pool, 1, log) // Предполагаем, что заказ с ID 1 существует
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get order from DB")
+		log.Error("Failed to get order from DB", err)
 	} else {
 		// Отправляем заказ в Kafka
-		err = kafka.ProduceOrder(&config, order)
+		err = kafka.ProduceOrder(&config, order, log)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to produce order")
+			log.Error("Failed to produce order", err)
+		} else {
+			log.Info("Order produced successfully")
 		}
 	}
 

@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
-
+	"wb-kafka-service/pkg/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +26,7 @@ type AppConfig struct {
 	}
 }
 
-func GetConfig() (AppConfig, error) {
+func GetConfig(log *logger.Logger) (AppConfig, error) {
 	var config AppConfig
 
 	env := os.Getenv("APP_ENV")
@@ -38,13 +38,16 @@ func GetConfig() (AppConfig, error) {
 
 	file, err := os.ReadFile(configFileName)
 	if err != nil {
+		log.Error(fmt.Sprintf("Error reading config file %s", configFileName), err)
 		return config, fmt.Errorf("error reading config file %s: %w", configFileName, err)
 	}
 
 	err = yaml.Unmarshal(file, &config)
 	if err != nil {
+		log.Error(fmt.Sprintf("Error parsing config file %s", configFileName), err)
 		return config, fmt.Errorf("error parsing config file %s: %w", configFileName, err)
 	}
 
+	log.Info(fmt.Sprintf("Successfully loaded config from %s", configFileName))
 	return config, nil
 }

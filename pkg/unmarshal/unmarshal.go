@@ -2,25 +2,27 @@ package unmarshal
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"wb-kafka-service/internal/models"
+	"wb-kafka-service/pkg/logger"
 )
 
-func ReadOrdersFromFiles(jsonFiles []string) []models.Order {
+func ReadOrdersFromFiles(log *logger.Logger, jsonFiles []string) []models.Order {
 	var orders []models.Order
 
 	for _, jsonFile := range jsonFiles {
 		jsonData, err := os.ReadFile(jsonFile)
 		if err != nil {
-			log.Fatalf("Error reading JSON file: %v", err)
+			log.Error("Error reading JSON file", err)
+			continue 
 		}
 
 		var order models.Order
 		err = json.Unmarshal(jsonData, &order)
 		if err != nil {
-			log.Fatalf("Error unmarshalling JSON: %v", err)
+			log.Error("Error unmarshalling JSON", err)
+			continue 
 		}
 
 		orders = append(orders, order)
@@ -29,10 +31,11 @@ func ReadOrdersFromFiles(jsonFiles []string) []models.Order {
 	return orders
 }
 
-func ReadOrdersFromDirectory(dir string) []models.Order {
+func ReadOrdersFromDirectory(log *logger.Logger, dir string) []models.Order {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		log.Fatalf("Error reading directory: %v", err)
+		log.Error("Error reading directory", err)
+		return nil 
 	}
 
 	var orders []models.Order
@@ -44,7 +47,7 @@ func ReadOrdersFromDirectory(dir string) []models.Order {
 		}
 	}
 
-	orders = ReadOrdersFromFiles(jsonFiles)
+	orders = ReadOrdersFromFiles(log, jsonFiles)
 
 	return orders
 }

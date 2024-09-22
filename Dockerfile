@@ -33,7 +33,7 @@ COPY . /usr/local/src/
 WORKDIR /usr/local/src/
 
 # Открываем порт для приложения
-EXPOSE 8082
+EXPOSE 8080
 
 # Стартовое командное приложение
 CMD ["/app"]

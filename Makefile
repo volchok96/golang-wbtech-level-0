@@ -1,16 +1,16 @@
 .PHONY: build up down run local docker clean clean-all
 
 build:
-	docker-compose build
+	APP_ENV=docker docker-compose build
 
 up:
-	docker-compose up -d
+	APP_ENV=docker docker-compose up -d
 
 down:
 	docker-compose down
 
 run:
-	APP_ENV=local cd cmd && go run main.go
+	cd cmd && go run main.go
 
 local: run
 

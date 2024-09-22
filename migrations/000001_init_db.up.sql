@@ -54,5 +54,3 @@ CREATE TABLE orders (
     date_created VARCHAR(255),
     oof_shard VARCHAR(255)
 );
-
--- DROP TABLE orders, delivery, payment, items;
