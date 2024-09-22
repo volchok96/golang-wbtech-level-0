@@ -21,28 +21,28 @@ func ConnectDB(config config.AppConfig) (*pgx.Conn, error) {
 			config.Postgres.DBName))
 }
 
-func InsertItem(ctx context.Context, tx pgx.Tx, item *models.Items) error {
+func InsertItem(ctx context.Context, tx pgx.Tx, items *models.Items) error {
 	err := tx.QueryRow(ctx,
 		`SELECT id FROM items WHERE chrt_id = $1 AND track_number = $2 AND price = $3`,
-		item.ChrtID,
-		item.TrackNumber,
-		item.Price).Scan(&item.ID)
+		items.ChrtID,
+		items.TrackNumber,
+		items.Price).Scan(&items.ID)
 
 	if err == pgx.ErrNoRows {
 		err = tx.QueryRow(ctx,
 			`INSERT INTO items (chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-			item.ChrtID,
-			item.TrackNumber,
-			item.Price,
-			item.Rid,
-			item.Name,
-			item.Sale,
-			item.Size,
-			item.TotalPrice,
-			item.NmID,
-			item.Brand,
-			item.Status).Scan(&item.ID)
+			items.ChrtID,
+			items.TrackNumber,
+			items.Price,
+			items.Rid,
+			items.Name,
+			items.Sale,
+			items.Size,
+			items.TotalPrice,
+			items.NmID,
+			items.Brand,
+			items.Status).Scan(&items.ID)
 	}
 	return err
 }

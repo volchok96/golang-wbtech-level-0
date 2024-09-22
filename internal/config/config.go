@@ -1,7 +1,6 @@
 package config
 
 import (
-	// "github.com/spf13/viper"
 	"os"
 	"gopkg.in/yaml.v3"
 )
@@ -9,6 +8,7 @@ import (
 type AppConfig struct {
 	Kafka struct {
 		Broker string
+		GroupID string
 		Topic  string
 	}
 	Postgres struct {
@@ -19,23 +19,6 @@ type AppConfig struct {
 		DBName   string
 	}
 }
-
-// func GetConfig() (AppConfig, error) {
-// 	viper.SetConfigName("config")
-// 	viper.SetConfigType("yaml")
-// 	viper.AddConfigPath(".")
-
-// 	if err := viper.ReadInConfig(); err != nil {
-// 		return AppConfig{}, err
-// 	}
-
-// 	var config AppConfig
-// 	if err := viper.Unmarshal(&config); err != nil {
-// 		return AppConfig{}, err
-// 	}
-
-// 	return config, nil
-// }
 
 func GetConfig() (AppConfig, error) {
 	var config AppConfig

@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/rs/zerolog/log"
 
-	"net/http"
 	"wb-kafka-service/internal/config"
 	"wb-kafka-service/internal/handlers"
 	"wb-kafka-service/internal/kafka"
@@ -18,11 +18,37 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to get config")
 	}
 
-	conn := postgres.ConnectToDB(&config)
+	conn, err := postgres.ConnectToDB(&config)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to connect to DB")
+	}
 	defer conn.Close(context.Background())
 
-	kafka.InitKafka(&config, conn)
+	// Запускаем Kafka-консюмера в отдельной горутине
+	go func() {
+		kafka.InitKafka(&config, conn)
+	}()
 
+	// Запускаем HTTP-сервер для обработки запросов
 	http.HandleFunc("/order", handlers.HandlerOrder)
-	http.ListenAndServe(":8082", nil)
+	log.Info().Msg("Starting HTTP server on :8080")
+	go func() {
+		if err := http.ListenAndServe(":8080", nil); err != nil {
+			log.Fatal().Err(err).Msg("HTTP server failed")
+		}
+	}()
+
+	// Читаем существующий заказ из базы данных
+	// order, err := postgres.GetOrderFromDB(context.Background(), conn, 1) // Предполагаем, что заказ с ID 1 существует
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to get order from DB")
+	// } else {
+	// 	// Отправляем заказ в Kafka
+	// 	err = kafka.ProduceOrder(&config, order)
+	// 	if err != nil {
+	// 		log.Error().Err(err).Msg("Failed to produce order")
+	// 	}
+	// }
+	// Бесконечный цикл для поддержания работы основного потока
+	select {}
 }

@@ -1,11 +1,14 @@
 kafka:
-  broker: "localhost"  # Имя контейнера Kafka в Docker-сети
-  port: "9092"     # Внутри Docker сети Kafka слушает на 9092 порту
-  topic: "orders"
+  broker: "localhost:9092"  
+  group_id: "my-group"
+  topic: "my-topic"   
 
 postgres:
-  host: "localhost"       # Имя контейнера Postgres в Docker-сети
-  port: "5432"
+  host: "localhost"      
   user: "postgres"
   password: "mypass"
   dbname: "orderdb"
+
+memcached:
+  host: "localhost"
+  port: "11211"
