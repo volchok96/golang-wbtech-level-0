@@ -14,6 +14,7 @@ services:
       - DATABASE_URL=postgres://postgres:mypass@db:5432/orderdb
       - KAFKA_BROKER=kafka:9092
       - MEMCACHED_HOST=memcached:11211
+      - APP_ENV=docker
     restart: always
 
   db:
@@ -56,6 +57,6 @@ services:
     container_name: memcached
     image: memcached:alpine
     ports:
-      - "11211:11211"
+      - "11212:11211"
     restart: always
       
