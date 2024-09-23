@@ -6,18 +6,19 @@ import (
 	"fmt"
 	"wb-kafka-service/internal/cache"
 	"wb-kafka-service/internal/config"
-	"wb-kafka-service/pkg/logger" 
+	"wb-kafka-service/pkg/logger"
 	"wb-kafka-service/internal/models"
 	"wb-kafka-service/pkg/postgres"
 	"wb-kafka-service/pkg/unmarshal"
 
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/segmentio/kafka-go"
 )
 
+// Cache - локальный кэш
 var Cache = make(map[int]models.Order)
 
-func InitKafka(cfg *config.AppConfig, pool *pgxpool.Pool, log *logger.Logger) {
+// InitKafka инициализирует Kafka-консьюмера и обрабатывает заказы
+func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, cacheClient cache.MemCacheClient) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  []string{cfg.Kafka.Broker},
 		Topic:    cfg.Kafka.Topic,
@@ -35,14 +36,14 @@ func InitKafka(cfg *config.AppConfig, pool *pgxpool.Pool, log *logger.Logger) {
 	// Обрабатываем каждый заказ отдельно
 	for _, order := range orders {
 		// Сохраняем заказ в базу данных
-		err := postgres.InsertOrderToDB(context.Background(), pool, &order, log)  
+		err := db.InsertOrderToDB(context.Background(), &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error inserting order into DB: %v", order.ID), err)
 			continue
 		}
 
 		// Сохраняем заказ в кэш
-		err = cache.SaveToCache(log, &order)  
+		err = cache.SaveToCache(log, cacheClient, &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error saving order to cache: %v", order.ID), err)
 			continue
@@ -70,14 +71,14 @@ func InitKafka(cfg *config.AppConfig, pool *pgxpool.Pool, log *logger.Logger) {
 		}
 
 		// Сохраняем заказ в базу данных
-		err = postgres.InsertOrderToDB(context.Background(), pool, &order, log)
+		err = db.InsertOrderToDB(context.Background(), &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error inserting order into DB: %v", order.ID), err)
 			continue
 		}
 
 		// Сохраняем заказ в кэш
-		err = cache.SaveToCache(log, &order)
+		err = cache.SaveToCache(log, cacheClient, &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error saving order to cache: %v", order.ID), err)
 			continue
@@ -90,7 +91,7 @@ func InitKafka(cfg *config.AppConfig, pool *pgxpool.Pool, log *logger.Logger) {
 	}
 }
 
-func ProduceOrder(cfg *config.AppConfig, order *models.Order, log *logger.Logger) error {
+func ProduceOrder(cfg config.AppConfig, order *models.Order, log logger.Logger) error {
 	writer := kafka.NewWriter(kafka.WriterConfig{
 		Brokers: []string{cfg.Kafka.Broker},
 		Topic:   cfg.Kafka.Topic,

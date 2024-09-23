@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
-	"wb-kafka-service/pkg/logger"
+	"wb-kafka-service/pkg/logger" 
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +26,7 @@ type AppConfig struct {
 	}
 }
 
-func GetConfig(log *logger.Logger) (AppConfig, error) {
+func GetConfig(log logger.Logger) (AppConfig, error) { 
 	var config AppConfig
 
 	env := os.Getenv("APP_ENV")

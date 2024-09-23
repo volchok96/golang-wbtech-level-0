@@ -3,79 +3,102 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"wb-kafka-service/internal/config"
-	"wb-kafka-service/internal/db"
+	"wb-kafka-service/internal/database"
 	"wb-kafka-service/internal/models"
-	"wb-kafka-service/pkg/logger" 
+	"wb-kafka-service/internal/config"
+
+	"wb-kafka-service/pkg/logger"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-func ConnectToDB(config *config.AppConfig, log *logger.Logger) (*pgxpool.Pool, error) {
-	pool, err := db.ConnectDB(log, *config)
+// PostgresDB - интерфейс для взаимодействия с базой данных
+type PostgresDB interface {
+	InsertOrderToDB(ctx context.Context, order *models.Order) error
+	GetOrderFromDB(ctx context.Context, orderID int) (*models.Order, error)
+}
+
+// PostgresDBImpl - структура для работы с базой данных через pgxpool
+type PostgresDBImpl struct {
+	Pool *pgxpool.Pool
+	Log  logger.Logger
+}
+
+// NewPostgresDB создаёт новый экземпляр PostgresDBImpl
+func NewPostgresDB(pool *pgxpool.Pool, log logger.Logger) *PostgresDBImpl {
+	return &PostgresDBImpl{Pool: pool, Log: log}
+}
+
+func ConnectDB(log logger.Logger, config config.AppConfig) (*pgxpool.Pool, error) {
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		config.Postgres.Host, config.Postgres.Port, config.Postgres.User, config.Postgres.Password, config.Postgres.DBName)
+	pool, err := pgxpool.Connect(context.Background(), connStr)
 	if err != nil {
-		log.Error("Unable to connect to database", err)
+		log.Error("Failed to connect to the database", err)
 		return nil, err
 	}
+
+	log.Info("Successfully connected to the database")
 	return pool, nil
 }
 
-func InsertOrderToDB(ctx context.Context, pool *pgxpool.Pool, order *models.Order, log *logger.Logger) error {
-	tx, err := pool.Begin(ctx)
+// InsertOrderToDB вставляет заказ в базу данных
+func (db *PostgresDBImpl) InsertOrderToDB(ctx context.Context, order *models.Order) error {
+	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		log.Error("Error starting transaction", err)
+		db.Log.Error("Error starting transaction", err)
 		return fmt.Errorf("error starting transaction: %v", err)
 	}
 	defer func() {
 		if p := recover(); p != nil {
 			tx.Rollback(ctx)
-			log.Error("Transaction rolled back due to panic", nil)
+			db.Log.Error("Transaction rolled back due to panic", nil)
 		}
 	}()
 
-	_, err = db.InsertDelivery(log, tx, &order.Delivery)
+	_, err = database.InsertDelivery(db.Log, tx, &order.Delivery)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Error("Error inserting delivery", err)
+		db.Log.Error("Error inserting delivery", err)
 		return fmt.Errorf("error inserting delivery: %v", err)
 	}
 
-	_, err = db.InsertPayment(log, tx, &order.Payment)
+	_, err = database.InsertPayment(db.Log, tx, &order.Payment)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Error("Error inserting payment", err)
+		db.Log.Error("Error inserting payment", err)
 		return fmt.Errorf("error inserting payment: %v", err)
 	}
 
 	for _, item := range order.Items {
-		err = db.InsertItem(log, tx, &item)  
+		err = database.InsertItem(db.Log, tx, &item)
 		if err != nil {
 			tx.Rollback(ctx)
-			log.Error("Error inserting item", err)
+			db.Log.Error("Error inserting item", err)
 			return fmt.Errorf("error inserting item: %v", err)
 		}
 	}
 
-	err = db.InsertOrder(log, tx, order)
+	err = database.InsertOrder(db.Log, tx, order)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Error("Error inserting order", err)
+		db.Log.Error("Error inserting order", err)
 		return fmt.Errorf("error inserting order: %v", err)
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		log.Error("Error committing transaction", err)
+		db.Log.Error("Error committing transaction", err)
 		return fmt.Errorf("error committing transaction: %v", err)
 	}
 
-	log.Info("Order successfully inserted")
+	db.Log.Info("Order successfully inserted")
 	return nil
 }
 
-func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int, log *logger.Logger) (*models.Order, error) {
+func (db *PostgresDBImpl) GetOrderFromDB(ctx context.Context, orderID int) (*models.Order, error) {
 	var order models.Order
-	err := pool.QueryRow(ctx, "SELECT id, order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard FROM orders WHERE id = $1", orderID).Scan(
+	err := db.Pool.QueryRow(ctx, "SELECT id, order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard FROM orders WHERE id = $1", orderID).Scan(
 		&order.ID,
 		&order.OrderUid,
 		&order.TrackNumber,
@@ -92,11 +115,11 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int, log *l
 		&order.OofShard,
 	)
 	if err != nil {
-		log.Error("Error getting order from DB", err)
+		db.Log.Error("Error getting order from DB", err)
 		return nil, err
 	}
 
-	err = pool.QueryRow(ctx, "SELECT id, name, phone, zip, city, address, region, email FROM delivery WHERE id = $1", order.Delivery.ID).Scan(
+	err = db.Pool.QueryRow(ctx, "SELECT id, name, phone, zip, city, address, region, email FROM delivery WHERE id = $1", order.Delivery.ID).Scan(
 		&order.Delivery.ID,
 		&order.Delivery.Name,
 		&order.Delivery.Phone,
@@ -107,11 +130,11 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int, log *l
 		&order.Delivery.Email,
 	)
 	if err != nil {
-		log.Error("Error getting delivery from DB", err)
+		db.Log.Error("Error getting delivery from DB", err)
 		return nil, err
 	}
 
-	err = pool.QueryRow(ctx, "SELECT id, transaction, request_id, currency, provider, amount, payment_dt, bank, delivery_cost, goods_total, custom_fee FROM payment WHERE id = $1", order.Payment.ID).Scan(
+	err = db.Pool.QueryRow(ctx, "SELECT id, transaction, request_id, currency, provider, amount, payment_dt, bank, delivery_cost, goods_total, custom_fee FROM payment WHERE id = $1", order.Payment.ID).Scan(
 		&order.Payment.ID,
 		&order.Payment.Transaction,
 		&order.Payment.RequestID,
@@ -125,13 +148,13 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int, log *l
 		&order.Payment.CustomFee,
 	)
 	if err != nil {
-		log.Error("Error getting payment from DB", err)
+		db.Log.Error("Error getting payment from DB", err)
 		return nil, err
 	}
 
-	rows, err := pool.Query(ctx, "SELECT id, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items")
+	rows, err := db.Pool.Query(ctx, "SELECT id, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items")
 	if err != nil {
-		log.Error("Error getting items from DB", err)
+		db.Log.Error("Error getting items from DB", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -153,17 +176,17 @@ func GetOrderFromDB(ctx context.Context, pool *pgxpool.Pool, orderID int, log *l
 			&item.Status,
 		)
 		if err != nil {
-			log.Error("Error scanning item from DB", err)
+			db.Log.Error("Error scanning item from DB", err)
 			return nil, err
 		}
 		order.Items = append(order.Items, item)
 	}
 
 	if err = rows.Err(); err != nil {
-		log.Error("Error iterating over items", err)
+		db.Log.Error("Error iterating over items", err)
 		return nil, err
 	}
 
-	log.Info("Order successfully retrieved from DB")
+	db.Log.Info("Order successfully retrieved from DB")
 	return &order, nil
 }

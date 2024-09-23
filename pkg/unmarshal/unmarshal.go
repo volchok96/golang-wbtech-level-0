@@ -8,7 +8,7 @@ import (
 	"wb-kafka-service/pkg/logger"
 )
 
-func ReadOrdersFromFiles(log *logger.Logger, jsonFiles []string) []models.Order {
+func ReadOrdersFromFiles(log logger.Logger, jsonFiles []string) []models.Order {
 	var orders []models.Order
 
 	for _, jsonFile := range jsonFiles {
@@ -31,7 +31,7 @@ func ReadOrdersFromFiles(log *logger.Logger, jsonFiles []string) []models.Order 
 	return orders
 }
 
-func ReadOrdersFromDirectory(log *logger.Logger, dir string) []models.Order {
+func ReadOrdersFromDirectory(log logger.Logger, dir string) []models.Order {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		log.Error("Error reading directory", err)

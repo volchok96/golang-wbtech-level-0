@@ -8,14 +8,14 @@ import (
 	"strconv"
 
 	"wb-kafka-service/internal/cache"
-	"wb-kafka-service/internal/config"
 	"wb-kafka-service/internal/models"
+	"wb-kafka-service/pkg/logger"
 	"wb-kafka-service/pkg/postgres"
-	"wb-kafka-service/pkg/logger" 
 
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
+// OrderPageData структура для отображения страницы заказа
 type OrderPageData struct {
 	Order    models.Order
 	Delivery models.Delivery
@@ -23,10 +23,10 @@ type OrderPageData struct {
 	Items    []models.Items
 }
 
-func HandlerOrder(log *logger.Logger, w http.ResponseWriter, r *http.Request) {
+// HandlerOrder обрабатывает запрос на получение заказа по его ID
+func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgres.PostgresDB, w http.ResponseWriter, r *http.Request) {
 	orderIDStr := r.URL.Query().Get("id")
 	orderID, err := strconv.Atoi(orderIDStr)
-
 	if err != nil {
 		log.Error("Invalid order ID", err)
 		http.Error(w, "Invalid order ID", http.StatusBadRequest)
@@ -34,7 +34,7 @@ func HandlerOrder(log *logger.Logger, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Попытка получить заказ из кэша
-	orderItem, err := cache.MemCache.Get("order:" + strconv.Itoa(orderID))
+	orderItem, err := cacheClient.Get("order:" + strconv.Itoa(orderID))
 	if err == nil {
 		order := models.Order{}
 		err = json.Unmarshal(orderItem.Value, &order)
@@ -44,48 +44,12 @@ func HandlerOrder(log *logger.Logger, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		delivery := order.Delivery
-		payment := order.Payment
-		items := order.Items
-
-		for i, item := range items {
-			item.ID = i + 1
-			items[i] = item
-		}
-
-		tmpl := template.Must(template.ParseFiles(".././ui.html"))
-		data := OrderPageData{
-			Order:    order,
-			Delivery: delivery,
-			Payment:  payment,
-			Items:    items,
-		}
-
-		err = tmpl.Execute(w, data)
-		if err != nil {
-			log.Error("Error executing template", err)
-			return
-		}
+		renderOrderPage(w, order, log)
 		return
 	}
 
 	// Если заказ не найден в кэше, попытка получить его из базы данных
-	cfg, err := config.GetConfig(log) 
-	if err != nil {
-		log.Error("Failed to get config", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	conn, err := postgres.ConnectToDB(&cfg, log)
-	if err != nil {
-		log.Error("Failed to connect to DB", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	defer conn.Close()
-
-	order, err := postgres.GetOrderFromDB(context.Background(), conn, orderID, log) // Передаем логгер
+	order, err := db.GetOrderFromDB(context.Background(), orderID)
 	if err != nil {
 		log.Warn("Order not found", nil)
 		http.Error(w, "Order not found", http.StatusNotFound)
@@ -99,13 +63,17 @@ func HandlerOrder(log *logger.Logger, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	err = cache.MemCache.Set(&memcache.Item{Key: "order:" + strconv.Itoa(orderID), Value: orderData})
+	err = cacheClient.Set(&memcache.Item{Key: "order:" + strconv.Itoa(orderID), Value: orderData})
 	if err != nil {
-		log.Error("Error saving order to memcache", err)
+		log.Error("Error saving order to cache", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
+	renderOrderPage(w, *order, log)
+}
+
+func renderOrderPage(w http.ResponseWriter, order models.Order, log logger.Logger) {
 	delivery := order.Delivery
 	payment := order.Payment
 	items := order.Items
@@ -117,15 +85,14 @@ func HandlerOrder(log *logger.Logger, w http.ResponseWriter, r *http.Request) {
 
 	tmpl := template.Must(template.ParseFiles(".././ui.html"))
 	data := OrderPageData{
-		Order:    *order,
+		Order:    order,
 		Delivery: delivery,
 		Payment:  payment,
 		Items:    items,
 	}
 
-	err = tmpl.Execute(w, data)
+	err := tmpl.Execute(w, data)
 	if err != nil {
 		log.Error("Error executing template", err)
-		return
 	}
 }
