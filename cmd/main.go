@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
-
+	"wb-kafka-service/internal/cache"
 	"wb-kafka-service/internal/config"
 	"wb-kafka-service/internal/handlers"
 	"wb-kafka-service/internal/kafka"
@@ -12,34 +12,34 @@ import (
 )
 
 func main() {
-	// Инициализация логгера с выводом в файл и консоль
-	log, err := logger.NewLogger("app.log", true) // true - логирование и в консоль, и в файл
+	log, err := logger.NewLogger("app.log", true)
 	if err != nil {
-		log.Fatal("Failed to create logger", err)
+		panic("Failed to create logger: " + err.Error())
 	}
 	defer log.Close()
 
-	// Получаем конфигурацию
-	config, err := config.GetConfig(log)
+	cfg, err := config.GetConfig(log)
 	if err != nil {
 		log.Fatal("Failed to get config", err)
 	}
 
-	// Подключение к базе данных
-	pool, err := postgres.ConnectToDB(&config, log)
+	pool, err := postgres.ConnectDB(log, cfg)
 	if err != nil {
 		log.Fatal("Failed to connect to DB", err)
 	}
 	defer pool.Close()
 
-	// Запускаем Kafka-консюмера в отдельной горутине
+	postgresDB := postgres.NewPostgresDB(pool, log)
+
+	memCacheClient := cache.NewMemCache("127.0.0.1:11211")
+
 	go func() {
 		log.Info("Starting Kafka consumer...")
-		kafka.InitKafka(&config, pool, log)
+		kafka.InitKafka(cfg, postgresDB, log, memCacheClient)
 	}()
 
 	http.HandleFunc("/order", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandlerOrder(log, w, r)
+		handlers.HandlerOrder(log, memCacheClient, postgresDB, w, r)
 	})
 
 	log.Info("Starting HTTP server on :8080")
@@ -49,20 +49,17 @@ func main() {
 		}
 	}()
 
-	// Читаем существующий заказ из базы данных
-	order, err := postgres.GetOrderFromDB(context.Background(), pool, 1, log) // Предполагаем, что заказ с ID 1 существует
+	order, err := postgresDB.GetOrderFromDB(context.Background(), 1)
 	if err != nil {
 		log.Error("Failed to get order from DB", err)
 	} else {
-		// Отправляем заказ в Kafka
-		err = kafka.ProduceOrder(&config, order, log)
+		err = kafka.ProduceOrder(cfg, order, log)
 		if err != nil {
-			log.Error("Failed to produce order", err)
+			log.Error("Failed to produce order to Kafka", err)
 		} else {
 			log.Info("Order produced successfully")
 		}
 	}
 
-	// Бесконечный цикл для поддержания работы основного потока
 	select {}
 }

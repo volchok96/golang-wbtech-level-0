@@ -56,3 +56,23 @@ test-docker: wrk-docker vegeta-docker
 	@echo "Completed Docker tests with wrk and vegeta"
 	@echo "Docker vegeta metrics saved to metrics-docker.json and plot to plot-docker.html"
 	open plot-docker.html
+
+# Цели для юнит тестов
+test-unit:
+	@echo "Running unit tests"
+	go test ./... -v
+
+# Цели для интеграционных тестов
+test-integration:
+	@echo "Running integration tests"
+	go test -tags=integration ./... -v
+
+# Цели для юнит тестов в Docker
+test-unit-docker:
+	@echo "Running unit tests in Docker"
+	docker-compose exec app go test ./... -v
+
+# Цели для интеграционных тестов в Docker
+test-integration-docker:
+	@echo "Running integration tests in Docker"
+	docker-compose exec app go test -tags=integration ./... -v
