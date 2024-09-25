@@ -15,7 +15,6 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
-// OrderPageData структура для отображения страницы заказа
 type OrderPageData struct {
 	Order    models.Order
 	Delivery models.Delivery
@@ -23,8 +22,7 @@ type OrderPageData struct {
 	Items    []models.Items
 }
 
-// HandlerOrder обрабатывает запрос на получение заказа по его ID
-func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgres.PostgresDB, w http.ResponseWriter, r *http.Request) {
+func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db *postgres.PostgresDBImpl, w http.ResponseWriter, r *http.Request) {
 	orderIDStr := r.URL.Query().Get("id")
 	orderID, err := strconv.Atoi(orderIDStr)
 	if err != nil {
@@ -33,7 +31,6 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 		return
 	}
 
-	// Попытка получить заказ из кэша
 	orderItem, err := cacheClient.Get("order:" + strconv.Itoa(orderID))
 	if err == nil {
 		order := models.Order{}
@@ -48,7 +45,6 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 		return
 	}
 
-	// Если заказ не найден в кэше, попытка получить его из базы данных
 	order, err := db.GetOrderFromDB(context.Background(), orderID)
 	if err != nil {
 		log.Warn("Order not found", nil)
@@ -56,7 +52,6 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 		return
 	}
 
-	// Обновление кэша
 	orderData, err := json.Marshal(order)
 	if err != nil {
 		log.Error("Error marshalling order", err)

@@ -14,11 +14,9 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// Cache - локальный кэш
 var Cache = make(map[int]models.Order)
 
-// InitKafka инициализирует Kafka-консьюмера и обрабатывает заказы
-func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, cacheClient cache.MemCacheClient) {
+func InitKafka(cfg config.AppConfig, db *postgres.PostgresDBImpl, log logger.Logger, cacheClient cache.MemCacheClient) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  []string{cfg.Kafka.Broker},
 		Topic:    cfg.Kafka.Topic,
@@ -30,26 +28,21 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 
 	log.Info("Kafka consumer initialized")
 
-	// Читаем заказы из директории
 	orders := unmarshal.ReadOrdersFromDirectory(log, ".././materials")
 
-	// Обрабатываем каждый заказ отдельно
 	for _, order := range orders {
-		// Сохраняем заказ в базу данных
 		err := db.InsertOrderToDB(context.Background(), &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error inserting order into DB: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем заказ в кэш
 		err = cache.SaveToCache(log, cacheClient, &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error saving order to cache: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем в локальный кэш
 		Cache[order.ID] = order
 
 		log.Info(fmt.Sprintf("Processed order from directory: %v", order))
@@ -62,7 +55,6 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 			continue
 		}
 
-		// Unmarshal данных из Kafka сообщения
 		var order models.Order
 		err = json.Unmarshal(msg.Value, &order)
 		if err != nil {
@@ -70,21 +62,18 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 			continue
 		}
 
-		// Сохраняем заказ в базу данных
 		err = db.InsertOrderToDB(context.Background(), &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error inserting order into DB: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем заказ в кэш
 		err = cache.SaveToCache(log, cacheClient, &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error saving order to cache: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем в локальный кэш
 		Cache[order.ID] = order
 
 		log.Info(fmt.Sprintf("Processed order from Kafka: %v", order))

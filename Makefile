@@ -22,7 +22,7 @@ clean: down
 clean-all: clean
 	docker-compose down --rmi all --volumes --remove-orphans
 
-# Локальные тесты с использованием localhost
+# Локальные стресс-тесты с использованием localhost
 wrk-local:
 	@echo "Running wrk test on /order endpoint (localhost)"
 	wrk -t12 -c400 -d30s http://localhost:8080/order?id=1
@@ -34,7 +34,7 @@ vegeta-local:
 	vegeta report -type=json results-local.bin > metrics-local.json
 	vegeta plot results-local.bin > plot-local.html
 
-# Docker тесты с использованием host.docker.internal (Docker)
+# Docker стресс-тесты
 wrk-docker:
 	@echo "Running wrk test on /order endpoint (Docker)"
 	wrk -t12 -c400 -d30s http://172.17.0.1:8080/order?id=1
@@ -46,7 +46,13 @@ vegeta-docker:
 	vegeta report -type=json results-docker.bin > metrics-docker.json
 	vegeta plot results-docker.bin > plot-docker.html
 
-# Комплексные цели для локального и docker окружения
+# Цель для юнит-тестов
+test-unit:
+	@echo "Running tests"
+	go test -coverprofile=coverage.out ./... -v
+	go tool cover -html=coverage.out
+
+# Комплексные цели для локального и docker окружения (стресс-тесты)
 test-local: wrk-local vegeta-local
 	@echo "Completed local tests with wrk and vegeta"
 	@echo "Local vegeta metrics saved to metrics-local.json and plot to plot-local.html"
@@ -56,23 +62,3 @@ test-docker: wrk-docker vegeta-docker
 	@echo "Completed Docker tests with wrk and vegeta"
 	@echo "Docker vegeta metrics saved to metrics-docker.json and plot to plot-docker.html"
 	open plot-docker.html
-
-# Цели для юнит тестов
-test-unit:
-	@echo "Running unit tests"
-	go test ./... -v
-
-# Цели для интеграционных тестов
-test-integration:
-	@echo "Running integration tests"
-	go test -tags=integration ./... -v
-
-# Цели для юнит тестов в Docker
-test-unit-docker:
-	@echo "Running unit tests in Docker"
-	docker-compose exec app go test ./... -v
-
-# Цели для интеграционных тестов в Docker
-test-integration-docker:
-	@echo "Running integration tests in Docker"
-	docker-compose exec app go test -tags=integration ./... -v

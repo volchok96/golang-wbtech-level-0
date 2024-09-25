@@ -4,3 +4,4 @@ cmd/app.log
 metrics-docker.json
 plot-docker.html
 results-docker.bin
+coverage.out
