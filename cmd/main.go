@@ -12,12 +12,14 @@ import (
 )
 
 func main() {
+	// Initialize the logger
 	log, err := logger.NewLogger("app.log", true)
 	if err != nil {
 		panic("Failed to create logger: " + err.Error())
 	}
 	defer log.Close()
 
+	// Get configuration
 	cfg, err := config.GetConfig(log)
 	if err != nil {
 		log.Fatal("Failed to get config", err)
