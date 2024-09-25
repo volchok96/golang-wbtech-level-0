@@ -36,10 +36,6 @@ func TestSaveToCache_Success(t *testing.T) {
 	mockCache.EXPECT().Set(&memcache.Item{Key: "delivery:1", Value: []byte("John Doe")}).Return(nil)
 	mockCache.EXPECT().Set(&memcache.Item{Key: "payment:1", Value: []byte("trans123")}).Return(nil)
 
-	// Настройка логгера
-	mockLogger.EXPECT().Info(gomock.Any()).Times(1) 
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any()).AnyTimes()
-
 	// Запуск функции
 	err := cache.SaveToCache(mockLogger, mockCache, order)
 
