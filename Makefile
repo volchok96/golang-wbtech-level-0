@@ -2,8 +2,11 @@
 
 # Local targets
 run:
-	cd cmd && go run main.go
+	cd cmd/app && go run main.go
 
+notify:
+	cd cmd/notifier && go run publish_to_kafka.go
+	
 local: run
 
 # Docker targets

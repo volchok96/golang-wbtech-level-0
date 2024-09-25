@@ -34,7 +34,7 @@ func GetConfig(log logger.Logger) (AppConfig, error) {
 		env = "local"
 	}
 
-	configFileName := fmt.Sprintf(".././config.%s.yaml", env)
+	configFileName := fmt.Sprintf("../.././config.%s.yaml", env)
 
 	file, err := os.ReadFile(configFileName)
 	if err != nil {
