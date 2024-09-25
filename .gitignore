@@ -5,3 +5,5 @@ metrics-docker.json
 plot-docker.html
 results-docker.bin
 coverage.out
+cmd/app/*.log
+cmd/notifier/*.log

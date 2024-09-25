@@ -31,7 +31,7 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 	log.Info("Kafka consumer initialized")
 
 	// Читаем заказы из директории
-	orders := unmarshal.ReadOrdersFromDirectory(log, ".././materials")
+	orders := unmarshal.ReadOrdersFromDirectory(log, "../.././materials")
 
 	// Обрабатываем каждый заказ отдельно
 	for _, order := range orders {

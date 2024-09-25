@@ -83,7 +83,7 @@ func renderOrderPage(w http.ResponseWriter, order models.Order, log logger.Logge
 		items[i] = item
 	}
 
-	tmpl := template.Must(template.ParseFiles(".././ui.html"))
+	tmpl := template.Must(template.ParseFiles("../.././ui.html"))
 	data := OrderPageData{
 		Order:    order,
 		Delivery: delivery,
