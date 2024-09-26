@@ -12,12 +12,13 @@ import (
 	"wb-kafka-service/pkg/unmarshal"
 
 	"github.com/segmentio/kafka-go"
+	"github.com/go-playground/validator/v10"
 )
 
-// Cache - локальный кэш
 var Cache = make(map[int]models.Order)
 
-// InitKafka инициализирует Kafka-консьюмера и обрабатывает заказы
+var validate = validator.New()
+
 func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, cacheClient cache.MemCacheClient) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  []string{cfg.Kafka.Broker},
@@ -30,26 +31,26 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 
 	log.Info("Kafka consumer initialized")
 
-	// Читаем заказы из директории
-	orders := unmarshal.ReadOrdersFromDirectory(log, ".././materials")
+	orders := unmarshal.ReadOrdersFromDirectory(log, "../.././materials")
 
-	// Обрабатываем каждый заказ отдельно
 	for _, order := range orders {
-		// Сохраняем заказ в базу данных
-		err := db.InsertOrderToDB(context.Background(), &order)
+		err := validate.Struct(order)
+		if err != nil {
+			log.Error(fmt.Sprintf("Validation failed for order from directory: %v", order.OrderUid), err)
+			continue
+		}
+		err = db.InsertOrderToDB(context.Background(), &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error inserting order into DB: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем заказ в кэш
 		err = cache.SaveToCache(log, cacheClient, &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error saving order to cache: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем в локальный кэш
 		Cache[order.ID] = order
 
 		log.Info(fmt.Sprintf("Processed order from directory: %v", order))
@@ -62,7 +63,6 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 			continue
 		}
 
-		// Unmarshal данных из Kafka сообщения
 		var order models.Order
 		err = json.Unmarshal(msg.Value, &order)
 		if err != nil {
@@ -70,21 +70,18 @@ func InitKafka(cfg config.AppConfig, db postgres.PostgresDB, log logger.Logger, 
 			continue
 		}
 
-		// Сохраняем заказ в базу данных
 		err = db.InsertOrderToDB(context.Background(), &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error inserting order into DB: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем заказ в кэш
 		err = cache.SaveToCache(log, cacheClient, &order)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error saving order to cache: %v", order.ID), err)
 			continue
 		}
 
-		// Сохраняем в локальный кэш
 		Cache[order.ID] = order
 
 		log.Info(fmt.Sprintf("Processed order from Kafka: %v", order))

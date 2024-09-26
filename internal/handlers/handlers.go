@@ -13,9 +13,9 @@ import (
 	"wb-kafka-service/pkg/postgres"
 
 	"github.com/bradfitz/gomemcache/memcache"
+	"github.com/go-playground/validator/v10" 
 )
 
-// OrderPageData структура для отображения страницы заказа
 type OrderPageData struct {
 	Order    models.Order
 	Delivery models.Delivery
@@ -23,7 +23,8 @@ type OrderPageData struct {
 	Items    []models.Items
 }
 
-// HandlerOrder обрабатывает запрос на получение заказа по его ID
+var validate = validator.New()
+
 func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgres.PostgresDB, w http.ResponseWriter, r *http.Request) {
 	orderIDStr := r.URL.Query().Get("id")
 	orderID, err := strconv.Atoi(orderIDStr)
@@ -33,7 +34,6 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 		return
 	}
 
-	// Попытка получить заказ из кэша
 	orderItem, err := cacheClient.Get("order:" + strconv.Itoa(orderID))
 	if err == nil {
 		order := models.Order{}
@@ -44,11 +44,14 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 			return
 		}
 
+		if err := validateOrder(&order, log, w); err != nil {
+			return
+		}
+
 		renderOrderPage(w, order, log)
 		return
 	}
 
-	// Если заказ не найден в кэше, попытка получить его из базы данных
 	order, err := db.GetOrderFromDB(context.Background(), orderID)
 	if err != nil {
 		log.Warn("Order not found", nil)
@@ -56,7 +59,10 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 		return
 	}
 
-	// Обновление кэша
+	if err := validateOrder(order, log, w); err != nil {
+		return
+	}
+
 	orderData, err := json.Marshal(order)
 	if err != nil {
 		log.Error("Error marshalling order", err)
@@ -73,6 +79,15 @@ func HandlerOrder(log logger.Logger, cacheClient cache.MemCacheClient, db postgr
 	renderOrderPage(w, *order, log)
 }
 
+func validateOrder(order *models.Order, log logger.Logger, w http.ResponseWriter) error {
+	if err := validate.Struct(order); err != nil {
+		log.Error("Order validation failed", err)
+		http.Error(w, "Invalid order data", http.StatusBadRequest)
+		return err
+	}
+	return nil
+}
+
 func renderOrderPage(w http.ResponseWriter, order models.Order, log logger.Logger) {
 	delivery := order.Delivery
 	payment := order.Payment
@@ -83,7 +98,7 @@ func renderOrderPage(w http.ResponseWriter, order models.Order, log logger.Logge
 		items[i] = item
 	}
 
-	tmpl := template.Must(template.ParseFiles(".././ui.html"))
+	tmpl := template.Must(template.ParseFiles("../.././ui.html"))
 	data := OrderPageData{
 		Order:    order,
 		Delivery: delivery,
