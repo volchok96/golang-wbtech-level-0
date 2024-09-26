@@ -6,25 +6,21 @@ import (
 	"wb-kafka-service/internal/database"
 	"wb-kafka-service/internal/models"
 	"wb-kafka-service/internal/config"
-
 	"wb-kafka-service/pkg/logger"
-
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/go-playground/validator/v10"
 )
 
-// PostgresDB - интерфейс для взаимодействия с базой данных
 type PostgresDB interface {
 	InsertOrderToDB(ctx context.Context, order *models.Order) error
 	GetOrderFromDB(ctx context.Context, orderID int) (*models.Order, error)
 }
 
-// PostgresDBImpl - структура для работы с базой данных через pgxpool
 type PostgresDBImpl struct {
 	Pool *pgxpool.Pool
 	Log  logger.Logger
 }
 
-// NewPostgresDB создаёт новый экземпляр PostgresDBImpl
 func NewPostgresDB(pool *pgxpool.Pool, log logger.Logger) *PostgresDBImpl {
 	return &PostgresDBImpl{Pool: pool, Log: log}
 }
@@ -42,8 +38,14 @@ func ConnectDB(log logger.Logger, config config.AppConfig) (*pgxpool.Pool, error
 	return pool, nil
 }
 
-// InsertOrderToDB вставляет заказ в базу данных
 func (db *PostgresDBImpl) InsertOrderToDB(ctx context.Context, order *models.Order) error {
+	validate := validator.New()
+	err := validate.Struct(order)
+	if err != nil {
+		db.Log.Error("Validation failed", err)
+		return fmt.Errorf("validation failed: %w", err)
+	}
+
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		db.Log.Error("Error starting transaction", err)
@@ -152,7 +154,7 @@ func (db *PostgresDBImpl) GetOrderFromDB(ctx context.Context, orderID int) (*mod
 		return nil, err
 	}
 
-	rows, err := db.Pool.Query(ctx, "SELECT id, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items")
+	rows, err := db.Pool.Query(ctx, "SELECT id, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items WHERE track_number = $1", order.TrackNumber)
 	if err != nil {
 		db.Log.Error("Error getting items from DB", err)
 		return nil, err
