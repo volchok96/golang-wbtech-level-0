@@ -7,3 +7,5 @@ results-docker.bin
 coverage.out
 cmd/app/*.log
 cmd/notifier/*.log
+config.local.yaml
+config.docker.yaml

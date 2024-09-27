@@ -16,7 +16,6 @@ func TestSaveToCache_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Создаем мок для MemCacheClient и логгера
 	mockCache := cache.NewMockMemCacheClient(ctrl)
 	mockLogger := logger.NewMockLogger(ctrl) // Используем новый мок для интерфейса Logger
 
@@ -30,13 +29,11 @@ func TestSaveToCache_Success(t *testing.T) {
 
 	orderData, _ := json.Marshal(order)
 
-	// Ожидания для вызовов Memcached
 	mockCache.EXPECT().Set(&memcache.Item{Key: "order:1", Value: orderData}).Return(nil)
 	mockCache.EXPECT().Set(&memcache.Item{Key: "item:1", Value: []byte("0")}).Return(nil)
 	mockCache.EXPECT().Set(&memcache.Item{Key: "delivery:1", Value: []byte("John Doe")}).Return(nil)
 	mockCache.EXPECT().Set(&memcache.Item{Key: "payment:1", Value: []byte("trans123")}).Return(nil)
 
-	// Запуск функции
 	err := cache.SaveToCache(mockLogger, mockCache, order)
 
 	assert.NoError(t, err)
