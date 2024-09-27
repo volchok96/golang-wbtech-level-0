@@ -75,7 +75,7 @@
   CREATE DATABASE orderdb;
   ```
 
-2. Выполните начальную миграцию с помощью скрипта [text](migrations/000001_init_db.up.sql) в директории migrations/.
+2. Выполните начальную миграцию с помощью скрипта [SQL](migrations/000001_init_db.up.sql) в директории migrations/.
 
 ## Запуск сервиса в локальной среде
 
