@@ -16,7 +16,7 @@ RUN go mod download
 COPY . ./
 
 # Сборка Go-приложения
-RUN go build -o ./bin/app cmd/main.go
+RUN go build -o ./bin/app cmd/app/main.go
 
 # Runner stage (с Go для тестов)
 FROM golang:1.22.3-alpine AS runner

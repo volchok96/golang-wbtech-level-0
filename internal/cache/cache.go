@@ -9,39 +9,32 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
-// MemCacheClient - интерфейс для работы с Memcache
 type MemCacheClient interface {
 	Set(item *memcache.Item) error
 	Get(key string) (*memcache.Item, error)
 	Delete(key string) error
 }
 
-// MemCache - структура, реализующая интерфейс MemCacheClient
 type MemCache struct {
 	Client *memcache.Client
 }
 
-// NewMemCache - конструктор для создания нового экземпляра MemCache
 func NewMemCache(server string) *MemCache {
 	return &MemCache{Client: memcache.New(server)}
 }
 
-// Set - метод для установки значения в кэш
 func (m *MemCache) Set(item *memcache.Item) error {
 	return m.Client.Set(item)
 }
 
-// Get - метод для получения значения из кэша
 func (m *MemCache) Get(key string) (*memcache.Item, error) {
 	return m.Client.Get(key)
 }
 
-// Delete - метод для удаления значения из кэша
 func (m *MemCache) Delete(key string) error {
 	return m.Client.Delete(key)
 }
 
-// SaveToCache - функция для сохранения заказа в кэш
 func SaveToCache(log logger.Logger, memCache MemCacheClient, order *models.Order) error {
 	orderData, err := json.Marshal(order)
 	if err != nil {
